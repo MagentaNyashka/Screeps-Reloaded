@@ -7,18 +7,18 @@ const roles = {
     harvester: require('role.harvester')
 };
 
+const cacher = require('./Cacher').runCacher;
+const architector = require('./Architector').runArchitector;
+
 module.exports.loop = function () {
     if(!global){
         global = {};
     }
 
     console.log('Running...');
-    BehaviorTree.cacherBehavior.run('W2N5');
-    BehaviorTree.spawnBehavior.run('W2N25');
-
-    // const customType = constants.CUSTOM_STRUCTURES.SLINK;
-    // const realType = constants.CUSTOM_STRUCTURES_ASSIGN[customType];
-    // console.log(`Custom: ${customType}, Real: ${realType}`);
+    
+    cacher.run('W2N5');
+    architector.run('W2N5');
 
     for (const name in Game.creeps) {
         const creep = Game.creeps[name];
