@@ -42,6 +42,62 @@ const LAB_BLOCK = [
 	{ x: 0, y: 0, structure: STRUCTURE_LAB },
 ]
 
+function canPlaceAt(x, y) {
+	return (
+		terrain.get(x, y) !== TERRAIN_MASK_WALL &&
+		room.lookForAt(LOOK_STRUCTURES, x, y).length === 0 &&
+		room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).length === 0
+	);
+}
+
+function canPlaceBlock(Pivot, block){
+	for(const pos of block){
+		const x = Pivot.x + pos.x;
+		const y = Pivot.y + pos.y;
+		if(!canPlaceAt(x, y)){
+			return false;
+		}
+	}
+	return true;
+}
+
+function findPlaceForBlock(origin, BLOCK){
+	let r = 0;
+	let Available = false;
+	let pivot = {x: -1, y: -1};
+	while(!Available){
+		const pos1 = {x: origin.x-r, y: origin.y-r};
+		const pos2 = {x: origin.x+r, y: origin.y+r}; 
+		for(let x = pos1.x; x < pos2.x; x++){
+			for(let y = pos1.y; y < pos2.y; y++){
+				Available = canPlaceBlock({x: x, y:y}, BLOCK);
+				pivot.x = x;
+				pivot.y = y;
+			}
+		}
+		r++;
+	}
+	return pivot;
+}
+
+function placeStructuresInBlock(origin, BLOCK){
+	for(const struct in BLOCK){
+		const x = origin+struct.x;
+		const y = origin+struct.y;
+		const structureType = struct.structure;
+		const name = (structureType === STRUCTURE_SPAWN) ? 'BEBRA' : '';
+
+		const status = Game.rooms[roomName].createConstructionSite(x,y,structureType,name);
+		return status;
+	}
+}
+
+function checkConstructionSites(){
+	const CScount = Object.keys(Game.constructionSites).length;
+	const freeCS = MAX_CONSTRUCTION_SITES - CScount;
+	return freeCS;
+}
+
 class spawnCheck extends Node{
     run(roomName){
         console.log('Starting spawnCheck');
@@ -305,15 +361,52 @@ class placeStructures extends Node {
     }
 }
 
+class extCheck extends Node{
+	run(roomName){
+		const structureType = STRUCTURE_EXTENSION;
+		const builtStructures = Game.rooms[roomName].find(FIND_MY_STRUCTURES) || [];
+		const constructionSites = Game.rooms[roomName].find(FIND_MY_CONSTRUCTION_SITES) || [];
+		const totalStructures = builtStructures.concat(constructionSites) || [];
+		const extCount = totalStructures.filter(s => s.structureType === structureType);
+		const RCL = Game.rooms[roomName].controller.level;
+		if(CONTROLLER_STRUCTURES[structureType][RCL] > extCount){
+			return FAILURE;
+		}
+		return SUCCESS;
+	}
+}
+
+class placeExt extends Node{
+	run(roomName){
+		const BLOCK = EXT_BLOCK;
+		const origin = Memory.roomProperties[roomName].corePoint;
+		const pivot = findPlaceForBlock(origin, BLOCK);
+		const status = placeStructuresInBlock(pivot,BLOCK);
+
+		if(status === OK){
+			return SUCCESS;
+		}
+		return FAILURE;
+	}
+}
 
 
-
+//  NOTE:
+//  Alt option: add checker for each block type so I can identify not-yet-built-block in a specific spot
+//  Alt option: store not-yet-built-blocks in global. and readd them sometimes(if block is placed correctly avoid adding it to global.)
+// [+]	Check spawn/Place spawn
+// [-]	Check global./Place global.
+// [-]	Check missing structures//Place missing structures
 
 const runArchitector = new Sequence([
     new Selector([
         new spawnCheck(),               //check missing spawn
         new placeSpawn()                //place missing spawn based on algorithm and write Memory.roomProperties[roomName].corePoint
     ]),
+	new Selector([
+		new extCheck(),					//check missing extensions
+		new placeExt()					//place missing extensions
+	]),
 	new Selector([
 		new structureCheck(),			//check missing structures
 		new placeStructures()			//place missing structures based on rcl(excluding special like scont and ccont)
