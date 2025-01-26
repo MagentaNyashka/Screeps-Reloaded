@@ -11,12 +11,16 @@ const roles = {
     harvester: require('role.harvester')
 };
 
+// const roomName = 'W2N5';
+const roomName = 'sim';
+
+
 module.exports.loop = function () {
     console.log('Running...');
     
-    Cacher.run('W2N5');
-    GlobalCacher.run('W2N25');
-    Architector.run('W2N5');
+    Cacher.run(roomName);
+    GlobalCacher.run(roomName);
+    Architector.run(roomName);
 
 
     for (const name in Game.creeps) {

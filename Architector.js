@@ -1,6 +1,138 @@
 const { Node, Sequence, Selector, SUCCESS, FAILURE } = require('./BehaviorTree');
 const constants = require('./constants');
 
+
+
+class AdvancedArchitectror {
+    constructor(roomName, BLOCK){
+        console.log('Starting AdvancedArchitectror');
+        this.roomName = roomName;
+        this.room = Game.rooms[roomName];
+        this.BLOCK = BLOCK;
+        this.origin = Memory.roomProperties[this.roomName].corePoint;
+    }
+    run(){
+        const room = Game.rooms[this.roomName];
+        if(!room){
+            return FAILURE;
+        }
+
+
+
+
+
+        if(checkConstructionSites() < this.BLOCK.length * 4){return FAILURE;}
+        this.terrain = new Room.Terrain(this.roomName);
+        this.findPlaceForBlock();
+		const status = this.placeStructuresInBlock();
+        this.surroundWithRoad();
+        // return status;
+
+    }
+
+    findPlaceForBlock() {
+        console.log('Architector -> Finding place for block');
+        let r = 0;
+        let Available = false;
+        let pivot = { x: -1, y: -1 };
+        const center = this.origin;
+        let count = 0;
+    
+        while (!Available) {
+            const pos1 = { x: center.x - r, y: center.y - r };
+            const pos2 = { x: center.x + r, y: center.y + r };
+            console.log(`Checking positions from (${pos1.x}, ${pos1.y}) to (${pos2.x}, ${pos2.y})`);
+    
+            for (let x = pos1.x; x <= pos2.x; x++) {
+                for (let y = pos1.y; y <= pos2.y; y++) {
+                    const distanceFromOrigin = Math.sqrt(Math.pow(x - center.x, 2) + Math.pow(y - center.y, 2));
+                    if (distanceFromOrigin <= 3) {
+                        console.log(`Skipping position (${x}, ${y}) due to proximity to origin`);
+                        continue;
+                    }
+    
+                    console.log(`Checking position (${x}, ${y})`);
+                    if (this.canPlaceBlock({ x: x, y: y })) {
+                        Available = true;
+                        pivot.x = x;
+                        pivot.y = y;
+                        console.log(`Found available position at (${x}, ${y})`);
+                        break;
+                    }
+                }
+                if (Available) break;
+            }
+            r++;
+            count++;
+        }
+        this.pivot = pivot;
+    }
+
+    canPlaceBlock(Pivot){
+        console.log('Architector -> Checking if block can be placed');
+        for(const pos of this.BLOCK){
+            const x = Pivot.x + pos.x;
+            const y = Pivot.y + pos.y;
+            if(!this.canPlaceAt(x, y)){
+                return false;
+            }
+        }
+        return true;
+    }
+
+    canPlaceAt(x, y) {
+        console.log('Architector -> Checking if block can be placed at specific position');
+        const distanceFromOrigin = Math.sqrt(Math.pow(x - this.origin.x, 2) + Math.pow(y - this.origin.y, 2));
+        return (
+            this.terrain.get(x, y) !== TERRAIN_MASK_WALL &&
+            this.room.lookForAt(LOOK_STRUCTURES, x, y).length === 0 &&
+            this.room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).length === 0 &&
+            distanceFromOrigin > 3
+        );
+    }
+
+    placeStructuresInBlock() {
+        console.log('Architector -> Placing structures in block');
+        const BLOCK = this.BLOCK;
+        for (const struct of BLOCK) {
+            const x = this.pivot.x + struct.x;
+            const y = this.pivot.y + struct.y;
+            const structureType = struct.structure;
+            const name = (structureType === STRUCTURE_SPAWN) ? 'S' + Game.time : '';
+            console.log(`Placing ${structureType} at (${x}, ${y})`);
+
+            const status = Game.rooms[this.roomName].createConstructionSite(x, y, structureType, name);
+            console.log(`Status: ${status}`);
+        }
+        return SUCCESS;
+    }
+
+    surroundWithRoad() {
+        console.log('Architector -> Surrounding block with road');
+        const BLOCK = this.BLOCK;
+    
+        for (const struct of BLOCK) {
+            const structX = this.pivot.x + struct.x;
+            const structY = this.pivot.y + struct.y;
+    
+            for (let x = structX - 1; x <= structX + 1; x++) {
+                for (let y = structY - 1; y <= structY + 1; y++) {
+                    if ((x === structX && y === structY) || (x !== structX && y !== structY)) {
+                        continue;
+                    }
+                    if (this.canPlaceAt(x, y)) {
+                        console.log(`Placing road at (${x}, ${y})`);
+                        Game.rooms[this.roomName].createConstructionSite(x, y, STRUCTURE_ROAD);
+                    }
+                }
+            }
+        }
+    }
+
+}
+
+
+
 const MAIN_STRUCTURES = [
 	STRUCTURE_SPAWN,
 	STRUCTURE_EXTENSION,
@@ -42,60 +174,12 @@ const LAB_BLOCK = [
 	{ x: 0, y: 0, structure: STRUCTURE_LAB },
 ]
 
-function canPlaceAt(x, y) {
-	return (
-		terrain.get(x, y) !== TERRAIN_MASK_WALL &&
-		room.lookForAt(LOOK_STRUCTURES, x, y).length === 0 &&
-		room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).length === 0
-	);
-}
-
-function canPlaceBlock(Pivot, block){
-	for(const pos of block){
-		const x = Pivot.x + pos.x;
-		const y = Pivot.y + pos.y;
-		if(!canPlaceAt(x, y)){
-			return false;
-		}
-	}
-	return true;
-}
-
-function findPlaceForBlock(origin, BLOCK){
-	let r = 0;
-	let Available = false;
-	let pivot = {x: -1, y: -1};
-	while(!Available){
-		const pos1 = {x: origin.x-r, y: origin.y-r};
-		const pos2 = {x: origin.x+r, y: origin.y+r}; 
-		for(let x = pos1.x; x < pos2.x; x++){
-			for(let y = pos1.y; y < pos2.y; y++){
-				Available = canPlaceBlock({x: x, y:y}, BLOCK);
-				pivot.x = x;
-				pivot.y = y;
-			}
-		}
-		r++;
-	}
-	return pivot;
-}
-
-function placeStructuresInBlock(origin, BLOCK){
-	for(const struct in BLOCK){
-		const x = origin+struct.x;
-		const y = origin+struct.y;
-		const structureType = struct.structure;
-		const name = (structureType === STRUCTURE_SPAWN) ? 'BEBRA' : '';
-
-		const status = Game.rooms[roomName].createConstructionSite(x,y,structureType,name);
-		return status;
-	}
-}
 
 function checkConstructionSites(){
-	const CScount = Object.keys(Game.constructionSites).length;
-	const freeCS = MAX_CONSTRUCTION_SITES - CScount;
-	return freeCS;
+    console.log('Architector -> Checking construction sites');
+    const CScount = Object.keys(Game.constructionSites).length;
+    const freeCS = MAX_CONSTRUCTION_SITES - CScount;
+    return freeCS;
 }
 
 class spawnCheck extends Node{
@@ -105,53 +189,70 @@ class spawnCheck extends Node{
         if(!room){
             return FAILURE;
         }
-        const spawn = room.find(FIND_MY_SPAWNS);
-        if(spawn.length == 0){
+        const structureType = STRUCTURE_SPAWN;
+		const RCL = Game.rooms[roomName].controller.level;
+		const spawnCount = missingCount(roomName, structureType);
+        if(CONTROLLER_STRUCTURES[structureType][RCL] > spawnCount){
             return FAILURE;
         }
         return SUCCESS;
     }
 }
 
-class placeSpawn extends Node{
-    run(roomName){
-        console.log('Starting placeSpawn');
+class placeSpawn extends Node {
+    run(roomName) {
+        console.log('Architector -> Starting placeSpawn');
 
         const findPlaceForMainCenter = function (roomName) {
             function findCenter(roomName) {
                 const room = Game.rooms[roomName];
                 if (!room) {
+                    console.log(`Room ${roomName} not found`);
                     return null;
                 }
-            
+
                 const positions = [];
-            
+
                 const sources = room.find(FIND_SOURCES);
-                sources.forEach(source => positions.push(source.pos));
-            
+                if (!sources) {
+                    console.log(`Sources not found in room ${roomName}`);
+                } else {
+                    sources.forEach(source => positions.push(source.pos));
+                }
+
                 if (room.controller) {
                     positions.push(room.controller.pos);
+                } else {
+                    console.log(`Controller not found in room ${roomName}`);
                 }
-            
+
                 const mineral = room.find(FIND_MINERALS)[0];
                 if (mineral) {
                     positions.push(mineral.pos);
+                } else {
+                    console.log(`Mineral not found in room ${roomName}`);
                 }
-            
+
                 if (positions.length === 0) {
+                    console.log(`No positions found in room ${roomName}`);
                     return null;
                 }
-            
+
                 const centerX = Math.round(_.sum(positions.map(pos => pos.x)) / positions.length);
                 const centerY = Math.round(_.sum(positions.map(pos => pos.y)) / positions.length);
-            
+
                 return new RoomPosition(centerX, centerY, roomName);
             }
-            
+
             let center = findCenter(roomName);
+            if (!center) {
+                console.log(`Center not found for room ${roomName}`);
+                return null;
+            }
+
             const terrain = new Room.Terrain(roomName);
             const DIRECTION = { UP: 0, LEFT: 1, RIGHT: 2, DOWN: 3 };
-        
+
             function adjustCenter(center, direction) {
                 const directions = [
                     { dx: 0, dy: -1 }, // Up
@@ -162,50 +263,50 @@ class placeSpawn extends Node{
                 const dir = directions[direction];
                 return { x: center.x + dir.dx, y: center.y + dir.dy, roomName: center.roomName };
             }
-        
-            function countFreeBlocks(center) {
+
+            function countFreeBlocks(center, terrain) {
                 let freeBlocks = 25;
                 for (let x = center.x - 2; x <= center.x + 2; x++) {
                     for (let y = center.y - 2; y <= center.y + 2; y++) {
-                        if (terrain.get(x, y) === TERRAIN_MASK_WALL || terrain.get(x, y) === TERRAIN_MASK_LAVA) {
+                        if (terrain.get(x, y) === TERRAIN_MASK_WALL || terrain.get(x, y) === TERRAIN_MASK_LAVA || Game.rooms[center.roomName].lookForAt(LOOK_STRUCTURES, x, y).length > 0) {
                             freeBlocks--;
                         }
                     }
                 }
                 return freeBlocks;
             }
-        
+
             let checkedCenters = [];
             checkedCenters.push(center);
-        
-            let freeBlocks = countFreeBlocks(center);
-        
+
+            let freeBlocks = countFreeBlocks(center, terrain);
+
             do {
                 if (freeBlocks < 25) {
                     let blockStats = Array(4).fill(-1);
                     
                     _.forEach(DIRECTION, function (dirValue) {
                         let tempCenter = adjustCenter(center, dirValue);
-        
+
                         if (checkedCenters.some(c => c.x === tempCenter.x && c.y === tempCenter.y)) {
                             return;
                         }
-        
-                        let tempFreeBlocks = countFreeBlocks(tempCenter);
+
+                        let tempFreeBlocks = countFreeBlocks(tempCenter, terrain);
                         blockStats[dirValue] = tempFreeBlocks;
-        
+
                         checkedCenters.push(tempCenter);
                     });
-        
+
                     let bestDirection = blockStats.indexOf(Math.max(...blockStats));
                     
                     if (bestDirection !== -1) {
                         center = adjustCenter(center, bestDirection);
-                        freeBlocks = countFreeBlocks(center);
+                        freeBlocks = countFreeBlocks(center, terrain);
                     }
                 }
             } while (freeBlocks < 25);
-        
+
             new RoomVisual(roomName).circle(center.x, center.y, { fill: 'yellow', radius: 0.5 });
             // console.log(`Found suitable center: (${center.x}, ${center.y}) in room ${roomName}`);
             return center;
@@ -222,146 +323,6 @@ class placeSpawn extends Node{
     }
 }
 
-// const MISSING_STRUCTURES = [];
-
-// class structureCheck extends Node{
-// 	run(roomName){
-// 		MISSING_STRUCTURES = [];
-// 		const builtStructures = Game.rooms[roomName].find(FIND_MY_STRUCTURES);
-// 		const RCL = Game.rooms[roomName].controller.level;
-// 		for(const structureType in MAIN_STRUCTURES){
-// 			const filter = builtStructures.filter(s => s.structureType === structureType);
-// 			const delta = CONTROLLER_STRUCTURES[structureType][RCL] - filter.length;
-// 			if(delta > 0){
-// 				MISSING_STRUCTURES.push({structureType: structureType, count: delta});
-// 			}
-// 		}
-// 		if(MISSING_STRUCTURES.length > 0){
-// 			return FAILURE;
-// 		}
-// 		return SUCCESS;
-// 	}
-// }
-
-// class placeStructures extends Node {
-//     run(roomName) {
-//         console.log('Starting placeStructures');
-        
-//         const room = Game.rooms[roomName];
-//         if (!room) {
-//             return FAILURE;
-//         }
-
-//         const terrain = new Room.Terrain(roomName);
-//         const placedStructures = {};
-
-//         function canPlaceAt(x, y) {
-//             return (
-//                 terrain.get(x, y) !== TERRAIN_MASK_WALL &&
-//                 room.lookForAt(LOOK_STRUCTURES, x, y).length === 0 &&
-//                 room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).length === 0
-//             );
-//         }
-
-// 		function canPlaceBlock(Pivot, block){
-// 			for(const pos of block){
-// 				const x = Pivot.x + pos.x;
-// 				const y = Pivot.y + pos.y;
-// 				if(!canPlaceAt(x, y)){
-// 					return false;
-// 				}
-// 				return true;
-// 			}
-// 		}
-
-// 		function findPlaceForBlock(block){
-// 			let corePoint = Memory.roomProperties[roomName].corePoint;
-// 			let delta = 2;
-// 			let status = false;
-// 			while(!status){
-// 				for(let g = 1; g < 20; g++){
-// 					delta = 2 * g;
-// 					for(let i = 0; i < 4; i++){
-// 						if(i % 2 == 0){
-// 							corePoint.x += delta;
-// 						}else{
-// 							corePoint.y += delta;
-// 						}
-// 						status = canPlaceBlock(corePoint, block);
-// 					}
-// 					if(status){
-// 						break;
-// 					}
-// 				}
-// 			}
-// 			return corePoint;
-// 		}
-
-//         function placeStructureInBlock(block, structureType, pivot) {
-//             for (const pos of block) {
-//                 const x = pivot.x + pos.x;
-//                 const y = pivot.y + pos.y;
-
-//                 if (canPlaceAt(x, y)) {
-//                     const status = room.createConstructionSite(x, y, structureType);
-//                     if (status === OK) {
-//                         return true;
-//                     }
-//                 }
-//             }
-//             return false;
-//         }
-
-//         for (const missing of MISSING_STRUCTURES) {
-//             const { structureType, count } = missing;
-
-//             for (let i = 0; i < count; i++) {
-//                 let blockToUse;
-// 				switch(structureType){
-// 					case STRUCTURE_SPAWN:
-// 						blockToUse = MAIN_BLOCK;
-// 						break;
-// 					case STRUCTURE_EXTENSION:
-// 						blockToUse = EXT_BLOCK;
-// 						break;
-// 					case STRUCTURE_STORAGE:
-// 						blockToUse = MAIN_BLOCK;
-// 						break;
-// 					case STRUCTURE_TOWER:
-// 						blockToUse = TOWER_BLOCK;
-// 						break;
-// 					case STRUCTURE_OBSERVER:
-// 						blockToUse = MAIN_BLOCK;
-// 						break;
-// 					case STRUCTURE_POWER_SPAWN:
-// 						blockToUse = MAIN_BLOCK;
-// 						break;
-// 					case STRUCTURE_LAB:
-// 						blockToUse = LAB_BLOCK;
-// 						break;
-// 					case STRUCTURE_TERMINAL:
-// 						blockToUse = MAIN_BLOCK;
-// 						break;
-// 					case STRUCTURE_NUKER:
-// 						blockToUse = MAIN_BLOCK;
-// 						break;
-// 					case STRUCTURE_FACTORY:
-// 						blockToUse = MAIN_BLOCK;
-// 						break;
-// 				}
-// 				const Pivot = findPlaceForBlock(blockToUse);
-//                 if (!placeStructureInBlock(blockToUse, structureType)) {
-//                     console.log(`No valid position found for ${structureType} in room ${roomName}`);
-//                     return FAILURE;
-//                 }
-//             }
-//         }
-
-//         return SUCCESS;
-//     }
-// }
-
-
 function missingCount(roomName, structureType){
 	const builtStructures = Game.rooms[roomName].find(FIND_MY_STRUCTURES) || [];
 	const constructionSites = Game.rooms[roomName].find(FIND_MY_CONSTRUCTION_SITES) || [];
@@ -371,10 +332,11 @@ function missingCount(roomName, structureType){
 }
 class extCheck extends Node{
 	run(roomName){
+        console.log('Architector -> Starting extCheck');
 		const structureType = STRUCTURE_EXTENSION;
-		const extCount = missingCount(roomName);
+		const extCount = missingCount(roomName, structureType);
 		const RCL = Game.rooms[roomName].controller.level;
-		if(CONTROLLER_STRUCTURES[structureType][RCL] > extCount){
+		if(CONTROLLER_STRUCTURES[structureType][RCL] > extCount.length){
 			return FAILURE;
 		}
 		return SUCCESS;
@@ -383,17 +345,41 @@ class extCheck extends Node{
 
 class placeExt extends Node{
 	run(roomName){
-		const BLOCK = EXT_BLOCK;
-		if(checkConstructionSites() < BLOCK.length){return FAILURE;}
-		const origin = Memory.roomProperties[roomName].corePoint;
-		const pivot = findPlaceForBlock(origin, BLOCK);
-		const status = placeStructuresInBlock(pivot,BLOCK);
+        console.log('Architector -> Starting placeExt');
+        const AdvancedArchitector = new AdvancedArchitectror(roomName, EXT_BLOCK);
+        const status = AdvancedArchitector.run();
 
 		if(status === OK){
 			return SUCCESS;
 		}
 		return FAILURE;
 	}
+}
+
+class towerCheck extends Node{
+    run(roomName){
+        console.log('Architector -> Starting towerCheck');
+        const structureType = STRUCTURE_TOWER;
+        const towerCount = missingCount(roomName, structureType);
+        const RCL = Game.rooms[roomName].controller.level;
+        if(CONTROLLER_STRUCTURES[structureType][RCL] > towerCount.length){
+            return FAILURE;
+        }
+        return SUCCESS;
+    }
+}
+
+class placeTower extends Node{
+    run(roomName){
+        console.log('Architector -> Starting placeTower');
+        const AdvancedArchitector = new AdvancedArchitectror(roomName, TOWER_BLOCK);
+        const status = AdvancedArchitector.run();
+
+        if(status === OK){
+            return SUCCESS;
+        }
+        return FAILURE;
+    }
 }
 
 
@@ -413,18 +399,22 @@ const runArchitector = new Sequence([
 		new extCheck(),					//check missing extensions
 		new placeExt()					//place missing extensions
 	]),
-	new Selector([
-		new structureCheck(),			//check missing structures
-		new placeStructures()			//place missing structures based on rcl(excluding special like scont and ccont)
-	]),
-	new Selector([
-		new specialStructureCheck(),	//check spesial structures
-		new placeSpecialStructures()	//place special structures
-	]),
-	new Selector([
-		new sourceContCheck(),
+    new Selector([
+        new towerCheck(),               //check missing towers
+        new placeTower()                //place missing towers
+    ]),
+	// new Selector([
+		// new structureCheck(),			//check missing structures
+		// new placeStructures()			//place missing structures based on rcl(excluding special like scont and ccont)
+	// ]),
+	// new Selector([
+		// new specialStructureCheck(),	//check spesial structures
+		// new placeSpecialStructures()	//place special structures
+	// ]),
+	// new Selector([
+		// new sourceContCheck(),
 		
-	])
+	// ])
 ]);
 
 module.exports = { runArchitector };
