@@ -1,5 +1,6 @@
 const BehaviorTree = require('./BehaviorTree');
 const Architector = require('./Architector').runArchitector;
+const Architector2 = require('./Architector_v2').runArchitector;
 const Cacher = require('./Cacher').runCacher;
 const GlobalCacher = require('./GlobalCacher').runGlobalCacher;
 
@@ -20,7 +21,8 @@ module.exports.loop = function () {
     
     Cacher.run(roomName);
     GlobalCacher.run(roomName);
-    Architector.run(roomName);
+    // Architector.run(roomName);
+    Architector2.run(roomName);
 
 
     for (const name in Game.creeps) {
